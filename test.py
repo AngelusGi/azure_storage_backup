@@ -1,4 +1,3 @@
-from azure.core.credentials import AccessToken
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
 from azure.identity import ClientSecretCredential, EnvironmentCredential
 from azure.storage.blob import (
@@ -16,16 +15,30 @@ from storage_manager import ItemPaged
 logging.basicConfig(level=logging.WARNING)
 
 
+def retrieve_storage_account() -> dict[str, str]:
+    """
+    Retrieve the storage account information from environment variables.
+    """
+    source = os.getenv("SOURCE_STORAGE_ACCOUNT", None)
+    destination = os.getenv("DESTINATION_STORAGE_ACCOUNT", None)
+
+    overwrite: str = os.getenv("OVERWRITE_STORAGE_ACCOUNT", "False")
+
+    if not all([source, destination]):
+        raise ValueError(
+            "Environment variables SOURCE_STORAGE_ACCOUNT and DESTINATION_STORAGE_ACCOUNT must be set."
+        )
+
+    print(f"Overwrite setting is set to: {overwrite}")
+
+    return {"source": source, "destination": destination, "overwrite": overwrite}
+
+
 def authenticate_azure() -> ClientSecretCredential:
     """
     Authenticate using EnvironmentCredential.
     This assumes that the environment variables for Azure credentials are set.
     """
-    ##############################################################################
-    # Ensure you have set the following environment variables:
-    # AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET
-    ##############################################################################
-
     tenant_id = os.getenv("AZURE_TENANT_ID", None)
     client_id = os.getenv("AZURE_CLIENT_ID", None)
     client_secret = os.getenv("AZURE_CLIENT_SECRET", None)
@@ -207,15 +220,17 @@ def print_blobs(blobs: List[BlobProperties], container_name: str) -> None:
 
 
 if __name__ == "__main__":
-    source_storage_account_url = "https://testdevopsavd.blob.core.windows.net/"
-    destination_storage_account = f"https://pocaistgapp32220258.blob.core.windows.net/"
+    storage_accounts: dict[str, str] = retrieve_storage_account()
+    source_storage_account_url = storage_accounts["source"]
+    destination_storage_account_url = storage_accounts["destination"]
+    overwrite: bool = bool(storage_accounts["overwrite"])
 
     azure_auth: ClientSecretCredential = authenticate_azure()
     source_blob_storage: BlobServiceClient = authenticate_blob_storage(
         storage_account_url=source_storage_account_url, credential=azure_auth
     )
     destination_blob_storage: BlobServiceClient = authenticate_blob_storage(
-        storage_account_url=destination_storage_account, credential=azure_auth
+        storage_account_url=destination_storage_account_url, credential=azure_auth
     )
 
     container_list_source: List[ContainerProperties] = get_containers_in_storage(
@@ -237,52 +252,68 @@ if __name__ == "__main__":
             blob_storage_client=source_blob_storage, container=container
         )
 
-        blob_list_source: List[BlobProperties] = get_blobs_in_container(source_blob_auth)
+        blob_list_source: List[BlobProperties] = get_blobs_in_container(
+            source_blob_auth
+        )
 
         if len(blob_list_source) == 0:
-            print(f"No blobs found in source container '{container.name}'. Nothing to copy.")
+            print(
+                f"No blobs found in source container '{container.name}'. Nothing to copy."
+            )
             exit(1)
 
         print(f"Source Storage Account: {source_storage_account_url}")
-        print(f"Destination Storage Account: {destination_storage_account}")
-        print(f"Sample Container Name: {sample_container.name}")
-        print(f"Number of containers in source storage account: {len(container_list_source)}")
-        print(f"Number of containers in destination storage account: {len(container_list_destination)}")
-        print(f"Number of blobs in source container '{sample_container.name}': {len(blob_list_source)}")
+        print(f"Destination Storage Account: {destination_storage_account_url}")
+        print(f"Current Container Name: {container.name}")
+        print(
+            f"Number of containers in source storage account: {len(container_list_source)}"
+        )
+        print(
+            f"Number of containers in destination storage account: {len(container_list_destination)}"
+        )
+        print(
+            f"Number of blobs in source container '{container.name}': {len(blob_list_source)}"
+        )
 
         if len(blob_list_source) == 0:
             print("No blobs found in source container. Nothing to copy.")
-            exit(1)
+            exit(0)
 
-        # Get the source blob client properly
-        source_blob_client: BlobClient = source_blob_storage.get_blob_client(
-            container=sample_container.name, blob=sample_blob.name
-        )
+        for blob in blob_list_source:
+            print(f"Found blob: {blob.name}")
 
-    # Use the proper blob URL from the client
-    copy_source_blob = source_blob_client.url
-    print(f"Source blob URL: {copy_source_blob}")
+            # Get the source blob client properly
+            source_blob_client: BlobClient = source_blob_storage.get_blob_client(
+                container=container.name, blob=blob.name
+            )
 
-    # Create destination container if it doesn't exist
-    print(
-        f"\n--- Checking/Creating destination container '{sample_container.name}' ---"
-    )
-    dest_container_client = create_container_if_not_exists(
-        destination_blob_storage, sample_container.name
-    )
+            # Use the proper blob URL from the client
+            print(f"Source blob URL: {source_blob_client.url}")
 
-    destination_copy_blob: BlobClient = destination_blob_storage.get_blob_client(
-        container=sample_container.name, blob=sample_blob.name
-    )
+            # Create destination container if it doesn't exist
+            print(f"--- Checking/Creating destination container '{container.name}' ---")
+            dest_container_client = create_container_if_not_exists(
+                destination_blob_storage, container.name
+            )
 
-    try:
-        print(f"Starting copy of {copy_source_blob} to {destination_copy_blob.url}")
-        copy_result = destination_copy_blob.upload_blob_from_url(
-            source_url=copy_source_blob, metadata=sample_blob.metadata, overwrite=False
-        )
-        # copy_result = destination_copy_blob.start_copy_from_url(source_url=copy_source_blob, metadata=sample_blob.metadata, requires_sync=True)
-        print(f"Copy result: {copy_result}")
-    except HttpResponseError as e:
-        print(f"Copy failed with error: {e}")
-        print(f"Status code: {e.status_code}")
-        raise
+            destination_copy_blob: BlobClient = (
+                destination_blob_storage.get_blob_client(
+                    container=container.name, blob=blob.name
+                )
+            )
+
+            try:
+                print(
+                    f"Starting copy of {source_blob_client.url} to {destination_copy_blob.url}"
+                )
+                copy_result = destination_copy_blob.upload_blob_from_url(
+                    source_url=source_blob_client.url,
+                    metadata=source_blob_client.get_blob_properties().metadata,
+                    overwrite=overwrite,
+                )
+                # copy_result = destination_copy_blob.start_copy_from_url(source_url=copy_source_blob, metadata=sample_blob.metadata, requires_sync=True)
+                print(f"Copy result: {copy_result}")
+            except HttpResponseError as e:
+                print(f"Copy failed with error: {e}")
+                print(f"Status code: {e.status_code}")
+                raise
