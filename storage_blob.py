@@ -1,5 +1,5 @@
 from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
-from azure.identity import ClientSecretCredential, EnvironmentCredential
+from azure.identity import ClientSecretCredential
 from azure.storage.blob import (
     BlobClient,
     BlobServiceClient,
@@ -19,14 +19,14 @@ def retrieve_storage_account() -> dict[str, str]:
     """
     Retrieve the storage account information from environment variables.
     """
-    source = os.getenv("SOURCE_STORAGE_ACCOUNT", None)
-    destination = os.getenv("DESTINATION_STORAGE_ACCOUNT", None)
+    source = os.getenv("SOURCE_STORAGE_ACCOUNT_BLOB", None)
+    destination = os.getenv("DESTINATION_STORAGE_ACCOUNT_BLOB", None)
 
-    overwrite: str = os.getenv("OVERWRITE_STORAGE_ACCOUNT", "False")
+    overwrite: str = os.getenv("OVERWRITE_STORAGE_ACCOUNT_BLOB", "False")
 
     if not all([source, destination]):
         raise ValueError(
-            "Environment variables SOURCE_STORAGE_ACCOUNT and DESTINATION_STORAGE_ACCOUNT must be set."
+            "Environment variables SOURCE_STORAGE_ACCOUNT_BLOB and DESTINATION_STORAGE_ACCOUNT_BLOB must be set."
         )
 
     print(f"Overwrite setting is set to: {overwrite}")
@@ -36,7 +36,7 @@ def retrieve_storage_account() -> dict[str, str]:
 
 def authenticate_azure() -> ClientSecretCredential:
     """
-    Authenticate using EnvironmentCredential.
+    Authenticate using ClientSecretCredential.
     This assumes that the environment variables for Azure credentials are set.
     """
     tenant_id = os.getenv("AZURE_TENANT_ID", None)
@@ -70,10 +70,10 @@ def copy_from_source_in_azure(source_blob: BlobClient, destination_blob: BlobCli
 
 def authenticate_blob_storage(
     storage_account_url: str,
-    credential: EnvironmentCredential | ClientSecretCredential | None,
+    credential: ClientSecretCredential | None,
 ) -> BlobServiceClient:
     """
-    credential is an instance of EnvironmentCredential, ClientSecretCredential, or None.
+    credential is an instance of ClientSecretCredential, or None.
     None if you want to use SAS token attached to storage_account_url.
     """
     return BlobServiceClient(account_url=storage_account_url, credential=credential)

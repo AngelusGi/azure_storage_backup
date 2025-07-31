@@ -3,3 +3,4 @@ azure-identity
 azure-core
 python-dotenv
 colorama
+azure-storage-file-share
