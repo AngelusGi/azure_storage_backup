@@ -1,19 +1,62 @@
-import os, sys
+import os
+import sys
+import logging
 from azure.identity import ClientSecretCredential
-from azure.data.tables import TableServiceClient, TableClient
+from azure.data.tables import TableServiceClient, TableClient, UpdateMode
+from itertools import islice
+from collections import defaultdict
 
-### CONFIGURATION
+# =======================
+# LOGGING CONFIGURATION
+# =======================
+# Default log level for the script is INFO, can be overridden by environment variable REPLICA_LOG_LEVEL
+log_level_str = os.getenv("REPLICA_LOG_LEVEL", "INFO").upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("table_replica_test_split_INFO.log", mode="w"),
+    ],
+)
+
+logging.info(f"Logging level set to {log_level_str}")
+
+# =======================
+# AZURE SDK LOGGING CONFIGURATION
+# =======================
+# Set Azure SDK loggers to WARNING by default, can be overridden by environment variable AZURE_LOG_LEVEL
+azure_log_level_str = os.getenv("AZURE_LOG_LEVEL", "WARNING").upper()
+azure_log_level = getattr(logging, azure_log_level_str, logging.WARNING)
+
+azure_loggers = [
+    "azure",  # base Azure SDK logger
+    "azure.core.pipeline",  # network/http logs
+    "azure.identity",  # credential/authentication logs
+    "azure.data.tables",  # table storage logs
+]
+
+for logger_name in azure_loggers:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(azure_log_level)
+
+logging.info(f"Azure SDK loggers set to {azure_log_level_str}")
+
+# =======================
+# CONFIGURATION
+# =======================
 TENANT_ID = os.getenv("AZURE_TENANT_ID", None)
 CLIENT_ID = os.getenv("AZURE_CLIENT_ID", None)
 CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET", None)
 
-### Minimum required permission on Azure on AZURE_SOURCE_STORAGE_ACCOUNT_TABLE is 'Storage Table Data Reader' assigned to CLIENT_ID of Service Principal assigned at Storage Account level
 SOURCE_ACCOUNT = os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_TABLE", None)
-### Minimum required permission on Azure on AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE is 'Storage Table Data Contributor' assigned to CLIENT_ID of Service Principal assigned at Storage Account level
 DEST_ACCOUNT = os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE", None)
 
 
 def enforce_storage_table_url(url: str) -> str:
+    """Normalize Table Storage URL"""
     if not url.endswith(".table.core.windows.net"):
         url = f"{url}.table.core.windows.net"
     if not url.startswith("https://"):
@@ -21,58 +64,88 @@ def enforce_storage_table_url(url: str) -> str:
     return url
 
 
-### Ensure all required environment variables are set
+# =======================
+# VALIDATE ENV VARIABLES
+# =======================
 if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
-    raise ValueError(
-        "[!] Error: all authentication related environment variables must be set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET."
+    logging.error(
+        "Authentication environment variables must be set: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET."
     )
+    sys.exit(1)
 
 if not all([SOURCE_ACCOUNT, DEST_ACCOUNT]):
-    raise ValueError(
-        "[!] Error: all storage account related environment variables must be set AZURE_SOURCE_STORAGE_ACCOUNT_TABLE, AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE."
+    logging.error(
+        "Storage account environment variables must be set: AZURE_SOURCE_STORAGE_ACCOUNT_TABLE, AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE."
     )
+    sys.exit(1)
 
-### TABLE STORAGE ENDPOINTS
-### Define the endpoints for source and destination storage accounts
+# =======================
+# TABLE STORAGE ENDPOINTS
+# =======================
 source_url = enforce_storage_table_url(SOURCE_ACCOUNT)
-print(f"[i] Source Table Storage URL: {source_url}")
+logging.info(f"Source Table Storage URL: {source_url}")
 dest_url = enforce_storage_table_url(DEST_ACCOUNT)
-print(f"[i] Destination Table Storage URL: '{dest_url}'")
+logging.info(f"Destination Table Storage URL: {dest_url}")
 
-### AUTHENTICATION
-### Authenticate using a Service Principal (Client ID, Tenant ID, Client Secret)
+# =======================
+# AUTHENTICATION
+# =======================
 try:
     credential = ClientSecretCredential(
         tenant_id=TENANT_ID, client_id=CLIENT_ID, client_secret=CLIENT_SECRET
     )
 except Exception as e:
-    print(f"[!] Unable to authenticate: {e}")
+    logging.critical(f"Unable to authenticate: {e}")
     sys.exit(1)
 
-### CREATE SERVICE CLIENTS
-### TableServiceClient allows interaction with tables (create, list, delete, etc.)
+# =======================
+# CREATE SERVICE CLIENTS
+# =======================
 try:
     source_service = TableServiceClient(endpoint=source_url, credential=credential)
     dest_service = TableServiceClient(endpoint=dest_url, credential=credential)
 except Exception as e:
-    print(f"[x] Fatal error. Unable to create table service clients: {e}")
+    logging.critical(f"Fatal error. Unable to create table service clients: {e}")
     sys.exit(1)
 
+# =======================
+# RETRIEVE TABLES
+# =======================
 try:
-    ### GET ALL SOURCE TABLES
-    print(f"[i] Retrieving list of tables from {source_url}...")
+    logging.info(f"Retrieving list of tables from {source_url}...")
     source_tables = source_service.list_tables()
 except Exception as e:
-    print(f"[x] Fatal error. Error retrieving tables from {source_url}: {e}")
+    logging.critical(f"Fatal error. Error retrieving tables from {source_url}: {e}")
     sys.exit(1)
 
-### Loop through each table in the source account
+# =======================
+# ERROR REPORT
+# =======================
+errors = []
+
+
+# =======================
+# UTILITY: CHUNK ITERABLE
+# =======================
+def chunk(iterable, size=100):
+    """Yield successive chunks of given size from iterable"""
+    it = iter(iterable)
+    while True:
+        batch = list(islice(it, size))
+        if not batch:
+            break
+        yield batch
+
+
+# =======================
+# REPLICATE TABLES
+# =======================
 for table in source_tables:
     table_name = table.name
-    print(f"\n[i] Replicating table: '{table_name}'")
+    logging.info(f"--- Replicating table: '{table_name}' ---")
 
+    # Create clients
     try:
-        ### Create clients for source and destination tables
         source_table_client: TableClient = source_service.get_table_client(
             table_name=table_name
         )
@@ -80,30 +153,59 @@ for table in source_tables:
             table_name=table_name
         )
     except Exception as e:
-        print(f"[x] Error creating table clients for '{table_name}': {e}")
-        sys.exit(1)
+        logging.error(f"Error creating table clients for '{table_name}': {e}")
+        errors.append((table_name, str(e)))
+        continue
 
-    ### Create the table in the destination storage account if it does not exist
+    # Ensure destination table exists (idempotent)
     try:
-        dest_service.create_table(table_name)
-        print(f"[+] Table '{table_name}' created in storage '{dest_url}'")
+        dest_service.create_table_if_not_exists(table_name)
+        logging.info(f"Table '{table_name}' ensured in '{dest_url}'")
     except Exception as e:
-        print(f"[!] Could not create table '{table_name}' in storage '{dest_url}': {e}")
+        logging.error(f"Could not ensure table '{table_name}' in '{dest_url}': {e}")
+        errors.append((table_name, str(e)))
+        continue
 
-    ### Copy all entities from source table to destination table
-    entities = list(source_table_client.list_entities())  ### materialize iterator
-    total = len(entities)
-    copied = 0
+    # Copy entities
+    try:
+        entities = list(source_table_client.list_entities())
+        total = len(entities)
+        copied = 0
 
-    for idx, entity in enumerate(entities, start=1):
-        try:
-            ### upsert_entity ensures insert or update if entity already exists
-            dest_table_client.upsert_entity(entity)
-            copied += 1
-            print(f"\t[>] Copied {idx}/{total} entities...", end="\r")
-        except Exception as e:
-            print(f"[!] Error copying entity {entity.get('RowKey')}: {e}")
+        # Group entities by PartitionKey to comply with batch rules
+        partition_groups = defaultdict(list)
+        for entity in entities:
+            partition_groups[entity["PartitionKey"]].append(entity)
 
-    print(f"\n[✓] Finished: {copied}/{total} entities copied into table '{table_name}'")
+        # Submit batches per PartitionKey
+        for pk, pk_entities in partition_groups.items():
+            for batch in chunk(pk_entities, size=100):
+                try:
+                    dest_table_client.submit_transaction(
+                        [("upsert", e, {"mode": UpdateMode.MERGE}) for e in batch]
+                    )
+                    copied += len(batch)
+                    logging.info(
+                        f"Copied {copied}/{total} entities into '{table_name}'"
+                    )
+                except Exception as be:
+                    logging.error(
+                        f"Batch error in table '{table_name}' PartitionKey='{pk}': {be}"
+                    )
+                    errors.append((table_name, str(be)))
 
-print("\n[i] Script completed.")
+        logging.info(f"Finished: {copied}/{total} entities copied into '{table_name}'")
+
+    except Exception as e:
+        logging.error(f"Error copying entities from table '{table_name}': {e}")
+        errors.append((table_name, str(e)))
+
+# =======================
+# FINAL REPORT
+# =======================
+if errors:
+    logging.warning("--- Replica completed with errors ---")
+    for error_table, error_content in errors:
+        logging.warning(f"Table '{error_table}' -> Error: {error_content}")
+else:
+    logging.info("--- Replica completed successfully without errors ---")
