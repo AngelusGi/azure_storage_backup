@@ -12,6 +12,15 @@ SOURCE_ACCOUNT = os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_TABLE", None)
 ### Minimum required permission on Azure on AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE is 'Storage Table Data Contributor' assigned to CLIENT_ID of Service Principal assigned at Storage Account level
 DEST_ACCOUNT = os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE", None)
 
+
+def enforce_storage_table_url(url: str) -> str:
+    if not url.endswith(".table.core.windows.net"):
+        url = f"{url}.table.core.windows.net"
+    if not url.startswith("https://"):
+        url = f"https://{url}"
+    return url
+
+
 ### Ensure all required environment variables are set
 if not all([TENANT_ID, CLIENT_ID, CLIENT_SECRET]):
     raise ValueError(
@@ -23,6 +32,13 @@ if not all([SOURCE_ACCOUNT, DEST_ACCOUNT]):
         "[!] Error: all storage account related environment variables must be set AZURE_SOURCE_STORAGE_ACCOUNT_TABLE, AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE."
     )
 
+### TABLE STORAGE ENDPOINTS
+### Define the endpoints for source and destination storage accounts
+source_url = enforce_storage_table_url(SOURCE_ACCOUNT)
+print(f"[i] Source Table Storage URL: {source_url}")
+dest_url = enforce_storage_table_url(DEST_ACCOUNT)
+print(f"[i] Destination Table Storage URL: '{dest_url}'")
+
 ### AUTHENTICATION
 ### Authenticate using a Service Principal (Client ID, Tenant ID, Client Secret)
 try:
@@ -32,11 +48,6 @@ try:
 except Exception as e:
     print(f"[!] Unable to authenticate: {e}")
     sys.exit(1)
-
-### TABLE STORAGE ENDPOINTS
-### Define the endpoints for source and destination storage accounts
-source_url = f"https://{SOURCE_ACCOUNT}.table.core.windows.net"
-dest_url = f"https://{DEST_ACCOUNT}.table.core.windows.net"
 
 ### CREATE SERVICE CLIENTS
 ### TableServiceClient allows interaction with tables (create, list, delete, etc.)
@@ -49,16 +60,16 @@ except Exception as e:
 
 try:
     ### GET ALL SOURCE TABLES
-    print(f"[i] Retrieving list of tables from {SOURCE_ACCOUNT}...")
+    print(f"[i] Retrieving list of tables from {source_url}...")
     source_tables = source_service.list_tables()
 except Exception as e:
-    print(f"[x] Fatal error. Error retrieving tables from {SOURCE_ACCOUNT}: {e}")
+    print(f"[x] Fatal error. Error retrieving tables from {source_url}: {e}")
     sys.exit(1)
 
 ### Loop through each table in the source account
 for table in source_tables:
     table_name = table.name
-    print(f"\n[i] Replicating table: {table_name}")
+    print(f"\n[i] Replicating table: '{table_name}'")
 
     try:
         ### Create clients for source and destination tables
@@ -69,15 +80,15 @@ for table in source_tables:
             table_name=table_name
         )
     except Exception as e:
-        print(f"[x] Error creating table clients for {table_name}: {e}")
+        print(f"[x] Error creating table clients for '{table_name}': {e}")
         sys.exit(1)
 
     ### Create the table in the destination storage account if it does not exist
     try:
         dest_service.create_table(table_name)
-        print(f"[+] Table {table_name} created in storage {DEST_ACCOUNT}")
+        print(f"[+] Table '{table_name}' created in storage '{dest_url}'")
     except Exception as e:
-        print(f"[!] Could not create table {table_name} in storage {DEST_ACCOUNT}: {e}")
+        print(f"[!] Could not create table '{table_name}' in storage '{dest_url}': {e}")
 
     ### Copy all entities from source table to destination table
     entities = list(source_table_client.list_entities())  ### materialize iterator
@@ -93,6 +104,6 @@ for table in source_tables:
         except Exception as e:
             print(f"[!] Error copying entity {entity.get('RowKey')}: {e}")
 
-    print(f"\n[✓] Finished: {copied}/{total} entities copied into table {table_name}")
+    print(f"\n[✓] Finished: {copied}/{total} entities copied into table '{table_name}'")
 
 print("\n[i] Script completed.")
