@@ -1,5 +1,35 @@
 # Storage Account Backup Tool
 
+## Table of Contents
+
+1. [Azure Authentication](#azure-authentication)
+
+    - [Required Environment Variables](#azure-authentication--required-environment-variables)
+    - [Authentication Process](#azure-authentication--authentication-process)
+    - [Setup Instructions](#azure-authentication--setup-instructions)
+
+2. [Blob Storage](#blob-storage)
+
+    - [Required Environment Variables](#blob-storage--required-environment-variables)
+    - [Optional Environment Variables](#blob-storage--optional-environment-variables)
+    - [Required Azure RBAC](#blob-storage--required-azure-rbac)
+    - [Configuration Options](#blob-storage--configuration-options)
+
+3. [Queue](#queue)
+
+    - [Required Environment Variables](#queue--required-enviromnet-variables)
+    - [Required Azure RBAC](#queue--required-azure-rbac)
+
+4. [Tables](#tables)
+
+    - [Required Environment Variables](#tables--required-enviromnet-variables)
+    - [Required Azure RBAC](#tables--required-azure-rbac)
+
+5. [Additional Notes](#additional-notes)
+
+    - [Private Endpoint](#private-endpoint)
+    - [Examples](#examples)
+
 ## Azure Authentication
 
 This module uses Azure Service Principal authentication to connect to Azure services. The authentication process is based on three required environment variables that must be set before using any Azure storage components (queue, table, blob, file share).
