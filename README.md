@@ -25,7 +25,14 @@
     - [Required Environment Variables](#tables--required-enviromnet-variables)
     - [Required Azure RBAC](#tables--required-azure-rbac)
 
-5. [Additional Notes](#additional-notes)
+5. [File Share](#file-share)
+
+    - [Required Environment Variables](#file-share--required-environment-variables)
+    - [Authentication Process](#file-share--authentication-process)
+    - [Required Permissions](#file-share--required-permissions)
+    - [Usage Example](#file-share--usage-example)
+
+6. [Additional Notes](#additional-notes)
 
     - [Private Endpoint](#private-endpoint)
     - [Examples](#examples)
@@ -204,6 +211,37 @@ export AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE="YOUR-AZURE-STORAGE-ACCOUNT-TABLE
 
 - On **SOURCE** Storage Account `Storage Table Data Reader` permission must be assigned to service principal used to execute this script.
 - On **DESTINATION** Storage Account `Storage Table Data Contributor` permission must be assigned to service principal used to execute this script.
+
+## File Share
+
+### File Share | Required environment variables
+
+```bash
+export AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE="<source-connection-string-with-SAS>"
+export AZURE_SOURCE_TOKEN_SAS="<source-SAS-token>"
+export AZURE_DEST_CONNECTION_STRING_FILE_SHARE="<destination-connection-string-with-SAS>"
+export AZURE_DEST_TOKEN_SAS="<destination-SAS-token>"
+```
+
+### File Share | Authentication Process
+
+- L'autenticazione avviene tramite **connection string** contenente l'endpoint File e il parametro `SharedAccessSignature`.
+- Il **SAS token** viene aggiunto all'URL della share per le operazioni AzCopy e SDK.
+- Non è necessario Service Principal o Azure AD per questa modalità: i permessi sono definiti dal SAS.
+
+### File Share | Required Permissions
+
+- Il SAS token deve includere i permessi necessari (`sp=rwdlc` per read, write, delete, list, create) e deve essere valido per il periodo di utilizzo.
+- Il parametro `ss=f` deve essere presente per abilitare l'accesso alle File Share.
+
+### File Share | Usage Example
+
+```bash
+export AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE="FileEndpoint=https://<sourceaccount>.file.core.windows.net/;SharedAccessSignature=sv=..."
+export AZURE_SOURCE_TOKEN_SAS="sv=...&ss=f&srt=sco&sp=rwdlc&se=...&st=...&spr=https&sig=..."
+export AZURE_DEST_CONNECTION_STRING_FILE_SHARE="FileEndpoint=https://<destaccount>.file.core.windows.net/;SharedAccessSignature=sv=..."
+export AZURE_DEST_TOKEN_SAS="sv=...&ss=f&srt=sco&sp=rwdlc&se=...&st=...&spr=https&sig=..."
+```
 
 ## Additional Notes
 
