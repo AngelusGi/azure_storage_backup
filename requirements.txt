@@ -6,3 +6,4 @@ colorama
 azure-storage-queue
 azure-data-tables
 azure-mgmt-storage
+azure-storage-file-share
