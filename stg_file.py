@@ -5,80 +5,109 @@ import sys
 from azure.storage.fileshare import (
     ShareProperties,
 )  # azure-storage-file-share
+from azure.storage.fileshare import ShareClient
+from azure.mgmt.storage import StorageManagementClient
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 
 connection_string = os.getenv("STORAGE_CONNECTION_STRING")
 
+# Configurazione logging: console + file
+logger = logging.getLogger("azcopy_sync")
+logger.setLevel(logging.INFO)
 
-def run_azcopy_sync(source_sas_url: str, dest_sas_url: str):
-    """Execute azcopy sync command using subprocess"""
+# Stream handler (console)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+
+# File handler (dedicato)
+file_handler = logging.FileHandler("sync_file_share.log")
+file_handler.setLevel(logging.INFO)
+
+# Formatter comune
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(formatter)
+file_handler.setFormatter(formatter)
+
+# Aggiungi gli handler se non già presenti
+if not logger.handlers:
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+
+def run_azcopy_sync(source_sas_url: str, dest_sas_url: str) -> bool:
+    """Execute azcopy sync command with live log streaming and error handling"""
     try:
-        logging.info(f"Starting azcopy sync from {source_sas_url} to {dest_sas_url}")
+        logger.info(f"Starting azcopy sync from {source_sas_url} to {dest_sas_url}")
 
         # Build the azcopy command
         cmd = ["azcopy", "sync", source_sas_url, dest_sas_url]
 
-        # Execute the command
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Usa Popen per stream in tempo reale
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
 
-        logging.info(f"azcopy sync completed successfully")
-        logging.info(f"stdout: {result.stdout}")
+        # Stream stdout
+        for line in process.stdout:
+            logger.info(line.strip())
 
-        return True
+        # Stream stderr
+        for line in process.stderr:
+            logger.error(line.strip())
 
-    except subprocess.CalledProcessError as e:
-        logging.error(f"azcopy sync failed with return code {e.returncode}")
-        logging.error(f"stderr: {e.stderr}")
-        logging.error(f"stdout: {e.stdout}")
-        return False
+        # Aspetta la fine del processo
+        process.wait()
+
+        if process.returncode == 0:
+            logger.info("azcopy sync completed successfully")
+            return True
+        else:
+            logger.error(f"azcopy sync failed with return code {process.returncode}")
+            return False
+
     except FileNotFoundError:
-        logging.error(
+        logger.error(
             "azcopy command not found. Please ensure azcopy is installed and in PATH"
         )
         return False
     except Exception as e:
-        logging.error(f"Unexpected error during azcopy sync: {str(e)}")
+        logger.exception(f"Unexpected error during azcopy sync: {str(e)}")
         return False
 
 
 def create_share_with_quota_and_metadata(
-    connection_string_destination_storage: str, share_to_clone: ShareProperties
+    connection_string_destination_storage: str, share_to_clone
 ):
-    # [START create_share_client_from_conn_string]
-    from azure.storage.fileshare import ShareClient
+    """
+    Clona una file share in un altro storage account:
+    - Ricrea la share con metadata
+    - Imposta quota via data-plane
+    """
 
+    share_name: str = share_to_clone.name
     share_client = ShareClient.from_connection_string(
-        connection_string_destination_storage, share_to_clone.name
-    )
-    # [END create_share_client_from_conn_string]
-
-    # Create the share
-    share_client.create_share(
-        metadata=share_to_clone.metadata,
-        access_tier=share_to_clone.access_tier,
-        protocols=share_to_clone.protocols,
-        root_squash=share_to_clone.root_squash,
+        conn_str=connection_string_destination_storage, share_name=share_name
     )
 
     try:
-        # [START set_share_quota]
-        # Set the quota for the share to 1GB
-        share_client.set_share_quota(quota=share_to_clone.quota)
-        # [END set_share_quota]
+        # Crea la share con metadata (data-plane)
+        share_client.create_share(metadata=share_to_clone.metadata)
 
-        # # [START set_share_metadata]
-        # data = {"category": "test"}
-        # share_client.set_share_metadata(metadata=data)
-        # # [END set_share_metadata]
+        # Imposta quota se esiste (data-plane)
+        if share_to_clone.quota:
+            print(f"settings quota to {share_to_clone.quota}")
+            share_client.set_share_quota(quota=share_to_clone.quota)
 
-        # Get the metadata for the share
-        properties = share_client.get_share_properties().metadata
-        print(f"Share properties: {properties}")
+        print(f"Share {share_name} created successfully with metadata and quota.")
 
+    except Exception as e:
+        print(f"Error creating/updating share {share_name}: {e}")
     finally:
-        # Delete the share
-        # share.delete_share()
-        print("NOT IMPLEMENTED")
-    share_client.close()
+        share_client.close()
 
 
 def file_service_properties(connection_string: str):
@@ -106,16 +135,10 @@ def list_shares_in_service(connection_string: str):
     file_service = ShareServiceClient.from_connection_string(connection_string)
 
     try:
-        # [START fsc_list_shares]
-        # List the shares in the file service
         my_shares = list(file_service.list_shares())
-
-        # # Print the shares
-        # for share in my_shares:
-        #     print(share)
-        # # [END fsc_list_shares]
     except Exception as e:
         print(f"Error listing shares: {e}")
+        sys.exit(1)
     return my_shares
 
 
@@ -164,13 +187,16 @@ source_shares = list_shares_in_service(SOURCE_CONNECTION_STRING)
 print("Listing file shares:")
 for share in source_shares:
     print(f"input share {share}")
-    create_share_with_quota_and_metadata(DEST_CONNECTION_STRING, share)
+    create_share_with_quota_and_metadata(
+        connection_string_destination_storage=DEST_CONNECTION_STRING,
+        share_to_clone=share,
+    )
     source_endpoint = get_share_endpoint(
         connection_string=SOURCE_CONNECTION_STRING, file_name=share.name
     )
     destination_endpoint = get_share_endpoint(
         connection_string=DEST_CONNECTION_STRING, file_name=share.name
     )
-    src = f"{source_endpoint}?{SOURCE_SAS_TOKEN}"
-    dest = f"{destination_endpoint}?{DEST_SAS_TOKEN}"
-    run_azcopy_sync(source_sas_url=src, dest_sas_url=dest)
+
+    print(f"Running azcopy sync from '{source_endpoint}' to '{destination_endpoint}'")
+    run_azcopy_sync(source_sas_url=source_endpoint, dest_sas_url=destination_endpoint)
