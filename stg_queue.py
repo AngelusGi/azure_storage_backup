@@ -24,6 +24,13 @@ def setup_logging(log_file: str = "replica_queues.log") -> None:
 
 
 def enforce_storage_queue_url(url: str) -> str:
+    if (
+        url.find(".table.core.windows.net") != -1
+        or url.find(".blob.core.windows.net") != -1
+        or url.find(".file.core.windows.net") != -1
+    ):
+        logging.critical(f"Provided url is not valid for table. Provided url {url}")
+        sys.exit(1)
     if url.endswith("/"):
         url = url[:-1]
     if not url.endswith(".queue.core.windows.net"):
