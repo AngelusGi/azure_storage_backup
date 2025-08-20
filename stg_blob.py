@@ -1,10 +1,8 @@
-import os
 import sys
 import logging
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient, BlobClient
-from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
-from typing import List, Optional
+from azure.core.exceptions import HttpResponseError
 
 
 def enforce_storage_blob_url(url: str) -> str:
@@ -22,30 +20,6 @@ def enforce_storage_blob_url(url: str) -> str:
     if not url.startswith("https://"):
         url = f"https://{url}"
     return url
-
-
-def setup_logging(log_file: str = "blob_replica.log") -> None:
-    log_level_str = os.getenv("REPLICA_LOG_LEVEL", "INFO").upper()
-    log_level = getattr(logging, log_level_str, logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_file, mode="w"),
-        ],
-    )
-    azure_log_level_str = os.getenv("AZURE_LOG_LEVEL", "WARNING").upper()
-    azure_log_level = getattr(logging, azure_log_level_str, logging.WARNING)
-    azure_loggers = [
-        "azure",
-        "azure.core.pipeline",
-        "azure.identity",
-        "azure.storage.blob",
-    ]
-    for logger_name in azure_loggers:
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(azure_log_level)
 
 
 class BlobReplicator:

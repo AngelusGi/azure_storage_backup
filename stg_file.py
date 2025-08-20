@@ -1,25 +1,7 @@
-import os
 import sys
 import logging
 import subprocess
 from azure.storage.fileshare import ShareClient
-from typing import Optional
-
-
-def setup_logging(log_file: str = "replica_file_share.log") -> None:
-    log_level_str = os.getenv("REPLICA_LOG_LEVEL", "INFO").upper()
-    log_level = getattr(logging, log_level_str, logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_file, mode="w"),
-        ],
-    )
-    azure_log_level_str = os.getenv("AZURE_LOG_LEVEL", "WARNING").upper()
-    azure_log_level = getattr(logging, azure_log_level_str, logging.WARNING)
-    logging.getLogger("azure").setLevel(azure_log_level)
 
 
 class FileShareReplicator:

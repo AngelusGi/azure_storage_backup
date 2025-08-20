@@ -1,26 +1,8 @@
-import os
 import sys
 import time
 import logging
-import datetime
 from azure.identity import ClientSecretCredential
 from azure.storage.queue import QueueServiceClient
-
-
-def setup_logging(log_file: str = "replica_queues.log") -> None:
-    log_level_str = os.getenv("REPLICA_LOG_LEVEL", "INFO").upper()
-    log_level = getattr(logging, log_level_str, logging.INFO)
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_file, mode="w"),
-        ],
-    )
-    azure_log_level_str = os.getenv("AZURE_LOG_LEVEL", "WARNING").upper()
-    azure_log_level = getattr(logging, azure_log_level_str, logging.WARNING)
-    logging.getLogger("azure").setLevel(azure_log_level)
 
 
 def enforce_storage_queue_url(url: str) -> str:
