@@ -8,7 +8,13 @@ from typing import List, Optional
 
 
 def enforce_storage_blob_url(url: str) -> str:
-    """Normalize Blob Storage URL"""
+    if (
+        url.find(".file.core.windows.net") != -1
+        or url.find(".queue.core.windows.net") != -1
+        or url.find(".table.core.windows.net") != -1
+    ):
+        logging.critical(f"Provided url is not valid for table. Provided url {url}")
+        sys.exit(1)
     if url.endswith("/"):
         url = url[:-1]
     if not url.endswith(".blob.core.windows.net"):
