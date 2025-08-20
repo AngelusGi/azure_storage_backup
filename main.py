@@ -13,8 +13,9 @@ if __name__ == "__main__":
         client_secret=os.getenv("AZURE_CLIENT_SECRET"),
         source_account=os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_BLOB"),
         dest_account=os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_BLOB"),
-        overwrite=os.getenv("OVERWRITE_STORAGE_ACCOUNT_BLOB", "False").lower()
-        == "true",
+        overwrite=(
+            os.getenv("OVERWRITE_STORAGE_ACCOUNT_BLOB", "False").lower() == "true"
+        )
     )
     blob_replicator.replicate()
 
@@ -45,7 +46,5 @@ if __name__ == "__main__":
     file_replicator = FileShareReplicator(
         source_connection_string=os.getenv("AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE"),
         dest_connection_string=os.getenv("AZURE_DEST_CONNECTION_STRING_FILE_SHARE"),
-        source_sas_token=os.getenv("AZURE_SOURCE_TOKEN_SAS"),
-        dest_sas_token=os.getenv("AZURE_DEST_TOKEN_SAS"),
     )
     file_replicator.replicate()
