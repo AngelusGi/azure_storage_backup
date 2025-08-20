@@ -110,9 +110,6 @@ export AZURE_DESTINATION_STORAGE_ACCOUNT_QUEUE="YOUR-AZURE-STORAGE-ACCOUNT-QUEUE
 ### Tables | Required enviromnet variables
 
 ```bash
-export ARM_TENANT_ID="YOUR-TENANT-ID"
-export ARM_CLIENT_ID="YOUR-SERVICE-PRINCIPAL-CLIENT-ID"
-export ARM_CLIENT_SECRET="YOUR-SERVICE-PRINCIPAL-CLIENT-SECRET"
 export AZURE_SOURCE_STORAGE_ACCOUNT_TABLE="YOUR-AZURE-STORAGE-ACCOUNT-TABLE-NAME-OR-URL"
 export AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE="YOUR-AZURE-STORAGE-ACCOUNT-TABLE-NAME-OR-URL"
 ```
@@ -134,7 +131,7 @@ export AZURE_DEST_CONNECTION_STRING_FILE_SHARE="<destination-connection-string-w
 ### File Share | Authentication Process
 
 - Authentication is performed through a **connection string** containing the File endpoint and the `SharedAccessSignature` parameter.
-- The **SAS token** is appended to the share URL for AzCopy and SDK operations.
+- The **SAS token** is provided by the connection string for AzCopy and SDK operations.
 - A Service Principal or Azure AD is not required in this mode: permissions are defined by the SAS.
 
 ### File Share | Required Permissions
@@ -146,9 +143,7 @@ export AZURE_DEST_CONNECTION_STRING_FILE_SHARE="<destination-connection-string-w
 
 ```bash
 export AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE="FileEndpoint=https://<sourceaccount>.file.core.windows.net/;SharedAccessSignature=sv=..."
-export AZURE_SOURCE_TOKEN_SAS="sv=...&ss=f&srt=sco&sp=rwdlc&se=...&st=...&spr=https&sig=..."
 export AZURE_DEST_CONNECTION_STRING_FILE_SHARE="FileEndpoint=https://<destaccount>.file.core.windows.net/;SharedAccessSignature=sv=..."
-export AZURE_DEST_TOKEN_SAS="sv=...&ss=f&srt=sco&sp=rwdlc&se=...&st=...&spr=https&sig=..."
 ```
 
 ## Additional Notes
