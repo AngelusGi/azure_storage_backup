@@ -66,7 +66,7 @@ class QueueReplicator:
     def validate_env(self) -> bool:
         missing = []
         if not all([self.tenant_id, self.client_id, self.client_secret]):
-            missing += ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
+            missing += ["ARM_TENANT_ID", "ARM_CLIENT_ID", "ARM_CLIENT_SECRET"]
         if not all([self.source_account, self.dest_account]):
             missing += [
                 "AZURE_SOURCE_STORAGE_ACCOUNT_QUEUE",

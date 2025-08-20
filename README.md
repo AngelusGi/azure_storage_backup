@@ -43,9 +43,9 @@ This module uses Azure Service Principal authentication to connect to Azure serv
 
 ### Azure Authentication | Required Environment Variables
 
-- `AZURE_TENANT_ID`: The tenant ID of your Azure Active Directory
-- `AZURE_CLIENT_ID`: The client ID of your Azure Service Principal
-- `AZURE_CLIENT_SECRET`: The client secret of your Azure Service Principal
+- `ARM_TENANT_ID`: The tenant ID of your Azure Active Directory
+- `ARM_CLIENT_ID`: The client ID of your Azure Service Principal
+- `ARM_CLIENT_SECRET`: The client secret of your Azure Service Principal
 
 ### Azure Authentication | Authentication Process
 
@@ -110,9 +110,9 @@ export AZURE_DESTINATION_STORAGE_ACCOUNT_QUEUE="YOUR-AZURE-STORAGE-ACCOUNT-QUEUE
 ### Tables | Required enviromnet variables
 
 ```bash
-export AZURE_TENANT_ID="YOUR-TENANT-ID"
-export AZURE_CLIENT_ID="YOUR-SERVICE-PRINCIPAL-CLIENT-ID"
-export AZURE_CLIENT_SECRET="YOUR-SERVICE-PRINCIPAL-CLIENT-SECRET"
+export ARM_TENANT_ID="YOUR-TENANT-ID"
+export ARM_CLIENT_ID="YOUR-SERVICE-PRINCIPAL-CLIENT-ID"
+export ARM_CLIENT_SECRET="YOUR-SERVICE-PRINCIPAL-CLIENT-SECRET"
 export AZURE_SOURCE_STORAGE_ACCOUNT_TABLE="YOUR-AZURE-STORAGE-ACCOUNT-TABLE-NAME-OR-URL"
 export AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE="YOUR-AZURE-STORAGE-ACCOUNT-TABLE-NAME-OR-URL"
 ```
