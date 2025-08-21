@@ -2,65 +2,112 @@
 
 ## Table of Contents
 
-1. [Azure Authentication](#azure-authentication)
 
-    - [Required Environment Variables](#azure-authentication--required-environment-variables)
-    - [Authentication Process](#azure-authentication--authentication-process)
-    - [Setup Instructions](#azure-authentication--setup-instructions)
+1. [Azure Authentication and Configuration](#azure-authentication-and-configuration)
+    - [Required Authentication Variables/Arguments](#required-authentication-variablesarguments)
+    - [Usage: Environment Variables](#usage-environment-variables)
+    - [Usage: CLI Arguments](#usage-cli-arguments)
+    - [List of Supported CLI Arguments](#list-of-supported-cli-arguments)
+    - [Example: Mixed Usage](#example-mixed-usage)
+    - [Authentication Process](#authentication-process)
+    - [Setup Instructions](#setup-instructions)
 
 2. [Blob Storage](#blob-storage)
-
-    - [Required Environment Variables](#blob-storage--required-environment-variables)
-    - [Optional Environment Variables](#blob-storage--optional-environment-variables)
+    - [Required environment variables](#blob-storage--required-environment-variables)
+    - [Optional environment variables](#blob-storage--optional-environment-variables)
     - [Required Azure RBAC](#blob-storage--required-azure-rbac)
     - [Configuration Options](#blob-storage--configuration-options)
 
 3. [Queue](#queue)
-
-    - [Required Environment Variables](#queue--required-enviromnet-variables)
+    - [Required environment variables](#queue--required-enviromnet-variables)
     - [Required Azure RBAC](#queue--required-azure-rbac)
 
 4. [Tables](#tables)
-
-    - [Required Environment Variables](#tables--required-enviromnet-variables)
+    - [Required environment variables](#tables--required-enviromnet-variables)
     - [Required Azure RBAC](#tables--required-azure-rbac)
 
 5. [File Share](#file-share)
-
-    - [Required Environment Variables](#file-share--required-environment-variables)
+    - [Required environment variables](#file-share--required-environment-variables)
     - [Authentication Process](#file-share--authentication-process)
     - [Required Permissions](#file-share--required-permissions)
     - [Usage Example](#file-share--usage-example)
 
 6. [Additional Notes](#additional-notes)
-
     - [Private Endpoint](#private-endpoint)
     - [Examples](#examples)
 
-## Azure Authentication
+## Azure Authentication and Configuration
 
-This module uses Azure Service Principal authentication to connect to Azure services. The authentication process is based on three required environment variables that must be set before using any Azure storage components (queue, table, blob, file share).
+This tool supports configuration via **environment variables** and/or **CLI arguments**. You can use either method, or mix them: CLI arguments take precedence over environment variables.
 
-### Azure Authentication | Required Environment Variables
+### Required Authentication Variables/Arguments
 
-- `ARM_TENANT_ID`: The tenant ID of your Azure Active Directory
-- `ARM_CLIENT_ID`: The client ID of your Azure Service Principal
-- `ARM_CLIENT_SECRET`: The client secret of your Azure Service Principal
+- `ARM_TENANT_ID` or `--tenant-id`: The tenant ID of your Azure Active Directory
+- `ARM_CLIENT_ID` or `--client-id`: The client ID of your Azure Service Principal
+- `ARM_CLIENT_SECRET` or `--client-secret`: The client secret of your Azure Service Principal
 
-### Azure Authentication | Authentication Process
+### Usage: Environment Variables
 
-1. The service principal credentials are automatically retrieved from the environment variables
-2. Azure SDK uses these credentials to authenticate with Azure Active Directory
-3. Upon successful authentication, an access token is obtained
-4. This token is used to authorize requests to all Azure storage services (Queue, Table, Blob, File Share)
+Set the required variables before running:
 
-### Azure Authentication | Setup Instructions
+```bash
+export ARM_TENANT_ID="your-tenant-id"
+export ARM_CLIENT_ID="your-client-id"
+export ARM_CLIENT_SECRET="your-client-secret"
+export AZURE_SOURCE_STORAGE_ACCOUNT_BLOB="..."
+export AZURE_DESTINATION_STORAGE_ACCOUNT_BLOB="..."
+# ...other variables as documented below
+python main.py
+```
+
+### Usage: CLI Arguments
+
+You can pass any variable as a CLI argument. Example:
+
+```bash
+python main.py --tenant-id "your-tenant-id" --client-id "your-client-id" --client-secret "your-client-secret" --source-account-blob "..." --dest-account-blob "..."
+```
+
+If both CLI argument and environment variable are provided, the CLI argument is used.
+
+### List of Supported CLI Arguments
+
+- `--tenant-id`
+- `--client-id`
+- `--client-secret`
+- `--source-account-blob`
+- `--dest-account-blob`
+- `--overwrite-blob`
+- `--source-account-queue`
+- `--dest-account-queue`
+- `--source-account-table`
+- `--dest-account-table`
+- `--source-connection-string-file-share`
+- `--dest-connection-string-file-share`
+
+### Example: Mixed Usage
+
+You can mix environment variables and CLI arguments:
+
+```bash
+export ARM_TENANT_ID="your-tenant-id"
+python main.py --client-id "your-client-id" --client-secret "your-client-secret"
+```
+
+### Authentication Process
+
+1. The service principal credentials are retrieved from CLI arguments or environment variables.
+2. Azure SDK uses these credentials to authenticate with Azure Active Directory.
+3. Upon successful authentication, an access token is obtained.
+4. This token is used to authorize requests to all Azure storage services (Queue, Table, Blob, File Share).
+
+### Setup Instructions
 
 Before running the application, ensure you have:
 
 1. Created a Service Principal in Azure Active Directory
 2. Granted appropriate permissions to the Service Principal for the storage resources
-3. Exported the three environment variables with your actual values
+3. Provided the required configuration via environment variables and/or CLI arguments
 
 The authentication is centralized and automatically handled by the Azure SDK across all storage service components.
 
