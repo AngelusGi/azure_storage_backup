@@ -122,7 +122,7 @@ export AZURE_DESTINATION_STORAGE_ACCOUNT_BLOB="YOUR-AZURE-STORAGE-ACCOUNT-BLOB-N
 ### Blob Storage | Optional environment variables
 
 ```bash
-export OVERWRITE_STORAGE_ACCOUNT_BLOB="true"  # Optional: Set to "true" to overwrite existing blobs.
+export OVERWRITE_STORAGE_ACCOUNT_BLOB="true"
 ```
 
 ### Blob Storage | Required Azure RBAC
@@ -134,7 +134,7 @@ export OVERWRITE_STORAGE_ACCOUNT_BLOB="true"  # Optional: Set to "true" to overw
 
 The `OVERWRITE_STORAGE_ACCOUNT_BLOB` environment variable controls the behavior when a blob already exists in the destination:
 
-- `false` (default): Skip existing blobs without overwriting
+- `false` **(default)**: Skip existing blobs without overwriting
 - `true`: Overwrite existing blobs with source content
 
 ## Queue
