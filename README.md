@@ -2,7 +2,6 @@
 
 ## Table of Contents
 
-
 1. [Azure Authentication and Configuration](#azure-authentication-and-configuration)
     - [Required Authentication Variables/Arguments](#required-authentication-variablesarguments)
     - [Usage: Environment Variables](#usage-environment-variables)
