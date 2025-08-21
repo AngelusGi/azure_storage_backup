@@ -1,4 +1,4 @@
-Install-Module AzTable -Scope CurrentUser
+Install-Module  -Scope CurrentUser
 
 Import-Module Az.Accounts
 Import-Module Az.Storage
