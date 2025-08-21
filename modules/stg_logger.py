@@ -14,7 +14,7 @@ def setup_logging(log_file: str = "backup_tool.log") -> None:
             logging.FileHandler(log_file, mode="w"),
         ],
     )
-    logging.info(f"Default logger initialized as {log_level}")
+    logging.info(f"Default logger initialized as {log_level_str}")
     azure_log_level_str = os.getenv("AZURE_LOG_LEVEL", "WARNING").upper()
     azure_log_level = getattr(logging, azure_log_level_str, logging.WARNING)
     azure_loggers = [
@@ -26,4 +26,4 @@ def setup_logging(log_file: str = "backup_tool.log") -> None:
     for logger_name in azure_loggers:
         logger = logging.getLogger(logger_name)
         logger.setLevel(azure_log_level)
-        logging.info(f"Logger {logger_name} initialized as {azure_log_level}")
+        logging.info(f"Logger {logger_name} initialized as {azure_log_level_str}")

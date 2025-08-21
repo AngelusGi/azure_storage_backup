@@ -8,45 +8,79 @@ from modules.stg_logger import setup_logging
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Azure Storage Backup Tool")
-    parser.add_argument("--tenant-id", default=os.getenv("ARM_TENANT_ID"))
-    parser.add_argument("--client-id", default=os.getenv("ARM_CLIENT_ID"))
-    parser.add_argument("--client-secret", default=os.getenv("ARM_CLIENT_SECRET"))
     parser.add_argument(
-        "--source-account-blob",
+        required=True,
+        name_or_flags="--tenant-id",
+        default=os.getenv("ARM_TENANT_ID"),
+        type=str,
+    )
+    parser.add_argument(
+        required=True,
+        name_or_flags="--client-id",
+        default=os.getenv("ARM_CLIENT_ID"),
+        type=str,
+    )
+    parser.add_argument(
+        required=True,
+        name_or_flags="--client-secret",
+        default=os.getenv("ARM_CLIENT_SECRET"),
+        type=str,
+    )
+    parser.add_argument(
+        required=True,
+        name_or_flags="--source-account-blob",
         default=os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_BLOB"),
+        type=str,
     )
     parser.add_argument(
-        "--dest-account-blob",
+        required=True,
+        name_or_flags="--dest-account-blob",
         default=os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_BLOB"),
+        type=str,
     )
     parser.add_argument(
-        "--overwrite-blob",
-        default=os.getenv("OVERWRITE_STORAGE_ACCOUNT_BLOB", "False"),
+        required=False,
+        name_or_flags="--overwrite-blob",
+        default=os.getenv("OVERWRITE_STORAGE_ACCOUNT_BLOB", "false"),
+        type=bool,
     )
     parser.add_argument(
-        "--source-account-queue",
+        required=True,
+        name_or_flags="--source-account-queue",
         default=os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_QUEUE"),
+        type=str,
     )
     parser.add_argument(
-        "--dest-account-queue",
+        required=True,
+        name_or_flags="--dest-account-queue",
         default=os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_QUEUE"),
+        type=str,
     )
     parser.add_argument(
-        "--source-account-table",
+        required=True,
+        name_or_flags="--source-account-table",
         default=os.getenv("AZURE_SOURCE_STORAGE_ACCOUNT_TABLE"),
+        type=str,
     )
     parser.add_argument(
-        "--dest-account-table",
+        required=True,
+        name_or_flags="--dest-account-table",
         default=os.getenv("AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE"),
+        type=str,
     )
     parser.add_argument(
-        "--source-connection-string-file-share",
+        required=True,
+        name_or_flags="--source-connection-string-file-share",
         default=os.getenv("AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE"),
+        type=str,
     )
     parser.add_argument(
-        "--dest-connection-string-file-share",
+        required=True,
+        name_or_flags="--dest-connection-string-file-share",
         default=os.getenv("AZURE_DEST_CONNECTION_STRING_FILE_SHARE"),
+        type=str,
     )
+
     args = parser.parse_args()
 
     setup_logging("backup_tool.log")
