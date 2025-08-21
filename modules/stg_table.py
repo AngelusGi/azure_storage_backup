@@ -109,7 +109,7 @@ class TableReplicator:
             sys.exit(1)
         for table in source_tables:
             table_name = table.name
-            logging.info(f"--- Replicating table: '{table_name}' ---")
+            logging.info(f"Replicating table: '{table_name}'")
             try:
                 source_table_client: TableClient = self.source_service.get_table_client(
                     table_name=table_name
@@ -162,8 +162,8 @@ class TableReplicator:
                 logging.error(f"Error copying entities from table '{table_name}': {e}")
                 self.errors.append((table_name, str(e)))
         if self.errors:
-            logging.warning("--- Replica completed with errors ---")
+            logging.warning("Replica completed with errors")
             for error_table, error_content in self.errors:
                 logging.warning(f"Table '{error_table}' -> Error: {error_content}")
         else:
-            logging.info("--- Replica completed successfully without errors ---")
+            logging.info("Replication completed successfully without errors")

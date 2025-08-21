@@ -122,6 +122,4 @@ class FileShareReplicator:
             )
             if not result:
                 logging.error(f"Cannot perform sync for share {share.name}.")
-            logging.info(
-                "--------------------------------------------------------------------------------"
-            )
+        logging.info("Replica completed")

@@ -104,7 +104,7 @@ class BlobReplicator:
             sys.exit(1)
         for container in source_containers:
             container_name = container.name
-            logging.info(f"--- Replicating container: '{container_name}' ---")
+            logging.info(f"Replicating container: '{container_name}'")
             try:
                 source_container_client: ContainerClient = (
                     self.source_service.get_container_client(container_name)
@@ -193,8 +193,8 @@ class BlobReplicator:
                 )
                 self.errors.append((container_name, str(e)))
         if self.errors:
-            logging.warning("--- Replica completed with errors ---")
+            logging.warning("Replica completed with errors")
             for error_item, error_content in self.errors:
                 logging.warning(f"Item '{error_item}' -> Error: {error_content}")
         else:
-            logging.info("--- Replica completed successfully without errors ---")
+            logging.info("Replica completed successfully without errors")
