@@ -112,8 +112,8 @@ class QueueReplicator:
                         messages_per_page=32
                     )
                     total_copied = 0
-                    max_retries = 5
-                    retry_delay = 2
+                    max_retries = 10
+                    retry_delay = 10
                     for msg_batch in messages.by_page():
                         for msg in msg_batch:
                             for attempt in range(1, max_retries + 1):

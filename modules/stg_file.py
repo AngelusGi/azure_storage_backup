@@ -2,6 +2,7 @@ import sys
 import logging
 import subprocess
 from azure.storage.fileshare import ShareClient
+from typing import Optional
 
 
 class FileShareReplicator:

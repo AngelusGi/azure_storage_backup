@@ -2,7 +2,8 @@ import sys
 import logging
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient, BlobClient
-from azure.core.exceptions import HttpResponseError
+from azure.core.exceptions import ClientAuthenticationError, HttpResponseError
+from typing import List, Optional
 
 
 def enforce_storage_blob_url(url: str) -> str:
@@ -147,43 +148,66 @@ class BlobReplicator:
                     logging.info(f"No blobs found in container '{container_name}'")
                     continue
                 copied = 0
+                max_retries = 10
+                retry_delay = 10
                 for blob in blobs:
                     blob_name = blob.name
-                    try:
-                        source_blob_client: BlobClient = (
-                            source_container_client.get_blob_client(blob_name)
-                        )
-                        dest_blob_client: BlobClient = (
-                            dest_container_client.get_blob_client(blob_name)
-                        )
-                        source_properties = source_blob_client.get_blob_properties()
-                        dest_blob_client.upload_blob_from_url(
-                            source_url=source_blob_client.url,
-                            metadata=source_properties.metadata,
-                            overwrite=self.overwrite,
-                        )
-                        copied += 1
-                        logging.info(
-                            f"Copied {copied}/{total} blobs into '{container_name}' - '{blob_name}'"
-                        )
-                    except HttpResponseError as e:
-                        if e.status_code == 409 and not self.overwrite:
-                            logging.warning(
-                                f"Blob '{blob_name}' already exists in '{container_name}' (overwrite disabled)"
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            source_blob_client: BlobClient = (
+                                source_container_client.get_blob_client(blob_name)
+                            )
+                            dest_blob_client: BlobClient = (
+                                dest_container_client.get_blob_client(blob_name)
+                            )
+                            source_properties = source_blob_client.get_blob_properties()
+                            dest_blob_client.upload_blob_from_url(
+                                source_url=source_blob_client.url,
+                                metadata=source_properties.metadata,
+                                overwrite=self.overwrite,
                             )
                             copied += 1
-                        else:
-                            logging.error(
-                                f"Error copying blob '{blob_name}' in container '{container_name}': {e}"
+                            logging.info(
+                                f"Copied {copied}/{total} blobs into '{container_name}' - '{blob_name}'"
                             )
-                            self.errors.append(
-                                (f"{container_name}/{blob_name}", str(e))
-                            )
-                    except Exception as e:
-                        logging.error(
-                            f"Error copying blob '{blob_name}' in container '{container_name}': {e}"
-                        )
-                        self.errors.append((f"{container_name}/{blob_name}", str(e)))
+                            break
+                        except HttpResponseError as e:
+                            if e.status_code == 409 and not self.overwrite:
+                                logging.warning(
+                                    f"Blob '{blob_name}' already exists in '{container_name}' (overwrite disabled)"
+                                )
+                                copied += 1
+                                break
+                            else:
+                                if attempt < max_retries:
+                                    logging.warning(
+                                        f"[{container_name}] Attempt {attempt}/{max_retries} failed for blob '{blob_name}': {e}. Retrying in {retry_delay}s..."
+                                    )
+                                    import time
+
+                                    time.sleep(retry_delay)
+                                else:
+                                    logging.error(
+                                        f"[{container_name}] Failed to copy blob '{blob_name}' after {max_retries} attempts: {e}"
+                                    )
+                                    self.errors.append(
+                                        (f"{container_name}/{blob_name}", str(e))
+                                    )
+                        except Exception as e:
+                            if attempt < max_retries:
+                                logging.warning(
+                                    f"[{container_name}] Attempt {attempt}/{max_retries} failed for blob '{blob_name}': {e}. Retrying in {retry_delay}s..."
+                                )
+                                import time
+
+                                time.sleep(retry_delay)
+                            else:
+                                logging.error(
+                                    f"[{container_name}] Failed to copy blob '{blob_name}' after {max_retries} attempts: {e}"
+                                )
+                                self.errors.append(
+                                    (f"{container_name}/{blob_name}", str(e))
+                                )
                 logging.info(
                     f"Finished: {copied}/{total} blobs copied into '{container_name}'"
                 )

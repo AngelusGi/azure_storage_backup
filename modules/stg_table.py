@@ -139,22 +139,34 @@ class TableReplicator:
                     partition_groups[entity["PartitionKey"]].append(entity)
                 for pk, pk_entities in partition_groups.items():
                     for batch in chunk(pk_entities, size=100):
-                        try:
-                            dest_table_client.submit_transaction(
-                                [
-                                    ("upsert", e, {"mode": UpdateMode.MERGE})
-                                    for e in batch
-                                ]
-                            )
-                            copied += len(batch)
-                            logging.info(
-                                f"Copied {copied}/{total} entities into '{table_name}'"
-                            )
-                        except Exception as be:
-                            logging.error(
-                                f"Batch error in table '{table_name}' PartitionKey='{pk}': {be}"
-                            )
-                            self.errors.append((table_name, str(be)))
+                        max_retries = 10
+                        retry_delay = 10
+                        for attempt in range(1, max_retries + 1):
+                            try:
+                                dest_table_client.submit_transaction(
+                                    [
+                                        ("upsert", e, {"mode": UpdateMode.MERGE})
+                                        for e in batch
+                                    ]
+                                )
+                                copied += len(batch)
+                                logging.info(
+                                    f"Copied {copied}/{total} entities into '{table_name}'"
+                                )
+                                break
+                            except Exception as be:
+                                if attempt < max_retries:
+                                    logging.warning(
+                                        f"[Table: {table_name} PK: {pk}] Attempt {attempt}/{max_retries} failed for batch: {be}. Retrying in {retry_delay}s..."
+                                    )
+                                    import time
+
+                                    time.sleep(retry_delay)
+                                else:
+                                    logging.error(
+                                        f"Batch error in table '{table_name}' PartitionKey='{pk}' after {max_retries} attempts: {be}"
+                                    )
+                                    self.errors.append((table_name, str(be)))
                 logging.info(
                     f"Finished: {copied}/{total} entities copied into '{table_name}'"
                 )
