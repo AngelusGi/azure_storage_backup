@@ -1,4 +1,4 @@
-FROM alpine:3.22.1
+FROM python:3.12-alpine
 
 RUN apk add --no-cache ca-certificates curl py3-pip jq bash git gcc make python3-dev libc-dev libffi-dev openssl-dev libc6-compat gcompat && rm -f /var/cache/apk/*
 
@@ -9,10 +9,6 @@ RUN AZCOPY_VERSION=10.30.0 && \
   chmod +x /opt/azcopy/azcopy_linux_amd64_${AZCOPY_VERSION}/azcopy && \
   ln -s /opt/azcopy/azcopy_linux_amd64_${AZCOPY_VERSION}/azcopy /usr/bin/azcopy && \
   rm /tmp/azcopy_linux.tar.gz
-
-RUN pip3 install --upgrade pip
-RUN pip3 install --upgrade setuptools wheel
-RUN pip3 install --no-cache azure-cli==2.76.0
 
 RUN apk add --no-cache \
     less \
@@ -34,7 +30,7 @@ RUN apk -X https://dl-cdn.alpinelinux.org/alpine/edge/main add --no-cache \
     lttng-ust \
     openssh-client
 
-RUN POWERSHELL_VERSION=7.4.10 && \
+RUN POWERSHELL_VERSION=7.5.2 && \
     curl -L https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-musl-x64.tar.gz -o /tmp/powershell.tar.gz && \
     mkdir -p /opt/microsoft/powershell/7 && \
     tar zxf /tmp/powershell.tar.gz -C /opt/microsoft/powershell/7 && \
@@ -42,14 +38,44 @@ RUN POWERSHELL_VERSION=7.4.10 && \
     ln -s /opt/microsoft/powershell/7/pwsh /usr/bin/pwsh && \
     rm /tmp/powershell.tar.gz
 
-ARG CONFIG=config
-ARG AZURERM_CONTEXT_SETTINGS=AzureRmContextSettings.json
 ARG REPOSITORY=PSGallery
-ARG MODULE=Az
-ARG CONFIG=config
-ARG VERSION=7.1.0
+ARG MODULE_AZ=Az
+ARG VERSION_AZ=14.1.0
 
 ### install azure-powershell from PSGallery
 RUN pwsh -Command Set-PSRepository -Name ${REPOSITORY} -InstallationPolicy Trusted && \
-    pwsh -Command Install-Module -Name ${MODULE} -RequiredVersion ${VERSION} -Scope AllUsers -Repository ${REPOSITORY} && \
+    pwsh -Command Install-Module -Name ${MODULE_AZ} -RequiredVersion ${VERSION_AZ} -Scope AllUsers -Repository ${REPOSITORY} && \
     pwsh -Command Set-PSRepository -Name ${REPOSITORY} -InstallationPolicy Untrusted
+
+ARG MODULE_AZ_TABLE=AzTable
+ARG VERSION_AZ_TABLE=2.1.0
+
+RUN pwsh -Command Set-PSRepository -Name ${REPOSITORY} -InstallationPolicy Trusted && \
+    pwsh -Command Install-Module -Name ${MODULE_AZ_TABLE} -RequiredVersion ${VERSION_AZ_TABLE} -Scope AllUsers -Repository ${REPOSITORY} && \
+    pwsh -Command Set-PSRepository -Name ${REPOSITORY} -InstallationPolicy Untrusted
+
+# Copy Python source files into the container
+COPY . /app
+
+# Set working directory
+WORKDIR /app
+
+# Create Python virtual environment and install dependencies
+RUN python3 -m venv /app/venv && \
+    . /app/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install --upgrade setuptools wheel && \
+    pip install -r requirements.txt
+
+ARG AZURE_SOURCE_STORAGE_ACCOUNT_BLOB
+ARG AZURE_DESTINATION_STORAGE_ACCOUNT_BLOB
+ARG OVERWRITE_STORAGE_ACCOUNT_BLOB
+ARG AZURE_SOURCE_STORAGE_ACCOUNT_QUEUE
+ARG AZURE_DESTINATION_STORAGE_ACCOUNT_QUEUE
+ARG AZURE_SOURCE_STORAGE_ACCOUNT_TABLE
+ARG AZURE_DESTINATION_STORAGE_ACCOUNT_TABLE
+ARG AZURE_SOURCE_CONNECTION_STRING_FILE_SHARE
+ARG AZURE_DEST_CONNECTION_STRING_FILE_SHARE
+
+# Use venv Python interpreter to run your script
+CMD ["/app/venv/bin/python", "main.py"]
