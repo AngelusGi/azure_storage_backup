@@ -1,4 +1,5 @@
 import sys
+import time
 import logging
 from azure.identity import ClientSecretCredential
 from azure.data.tables import TableServiceClient, TableClient, UpdateMode
@@ -94,6 +95,44 @@ class TableReplicator:
             logging.critical(f"Unable to create table service clients: {e}")
             return False
 
+    def delete_existing_tables(self, table_names: list[str]) -> None:
+        """Delete existing tables in destination. Azure takes ~1 minute to fully delete tables."""
+        logging.info("Phase 1: Checking and deleting existing tables in destination")
+        tables_to_delete = []
+
+        # Check which tables exist in destination
+        try:
+            dest_tables = list(self.dest_service.list_tables())
+            existing_table_names = {t.name for t in dest_tables}
+
+            for table_name in table_names:
+                if table_name in existing_table_names:
+                    tables_to_delete.append(table_name)
+
+        except Exception as e:
+            logging.error(f"Error listing destination tables: {e}")
+            return
+
+        if not tables_to_delete:
+            logging.info("No existing tables to delete in destination")
+            return
+
+        # Delete existing tables
+        logging.info(
+            f"Deleting {len(tables_to_delete)} existing tables: {tables_to_delete}"
+        )
+        for table_name in tables_to_delete:
+            try:
+                self.dest_service.delete_table(table_name)
+                logging.info(f"Table '{table_name}' deleted from destination")
+            except Exception as e:
+                logging.error(f"Failed to delete table '{table_name}': {e}")
+                self.errors.append((table_name, f"deletion failed: {e}"))
+
+        if tables_to_delete:
+            logging.info("Waiting 60 seconds for Azure to fully delete tables...")
+            time.sleep(60)
+
     def replicate(self) -> None:
         logging.info(f"Source Table Storage URL: {self.source_url}")
         logging.info(f"Destination Table Storage URL: {self.dest_url}")
@@ -104,10 +143,18 @@ class TableReplicator:
         try:
             logging.info(f"Retrieving list of tables from {self.source_url}...")
             source_tables = self.source_service.list_tables()
+            source_tables_list = list(source_tables)  # Materializza la lista
+            table_names = [table.name for table in source_tables_list]
+
+            # Phase 1: Delete existing tables
+            self.delete_existing_tables(table_names)
+
+            # Phase 2: Create and copy tables
+            logging.info("Phase 2: Creating and copying tables")
         except Exception as e:
             logging.critical(f"Error retrieving tables from {self.source_url}: {e}")
             sys.exit(1)
-        for table in source_tables:
+        for table in source_tables_list:
             table_name = table.name
             logging.info(f"Replicating table: '{table_name}'")
             try:
@@ -122,8 +169,8 @@ class TableReplicator:
                 self.errors.append((table_name, str(e)))
                 continue
             try:
-                self.dest_service.create_table_if_not_exists(table_name)
-                logging.info(f"Table '{table_name}' ensured in '{self.dest_url}'")
+                self.dest_service.create_table(table_name)
+                logging.info(f"Table '{table_name}' created in '{self.dest_url}'")
             except Exception as e:
                 logging.error(
                     f"Could not ensure table '{table_name}' in '{self.dest_url}': {e}"

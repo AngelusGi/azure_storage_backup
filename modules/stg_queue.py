@@ -84,6 +84,45 @@ class QueueReplicator:
             logging.critical(f"Unable to create queue service clients: {e}")
             return False
 
+    def delete_existing_queues(self, queue_names: list[str]) -> None:
+        """Delete existing queues in destination. Azure takes ~1 minute to fully delete queues."""
+        logging.info("Phase 1: Checking and deleting existing queues in destination")
+        queues_to_delete = []
+
+        # Check which queues exist in destination
+        try:
+            dest_queues = list(self.dest_service.list_queues())
+            existing_queue_names = {q.name for q in dest_queues}
+
+            for queue_name in queue_names:
+                if queue_name in existing_queue_names:
+                    queues_to_delete.append(queue_name)
+
+        except Exception as e:
+            logging.error(f"Error listing destination queues: {e}")
+            return
+
+        if not queues_to_delete:
+            logging.info("No existing queues to delete in destination")
+            return
+
+        # Delete existing queues
+        logging.info(
+            f"Deleting {len(queues_to_delete)} existing queues: {queues_to_delete}"
+        )
+        for queue_name in queues_to_delete:
+            try:
+                dest_queue_client = self.dest_service.get_queue_client(queue_name)
+                dest_queue_client.delete_queue()
+                logging.info(f"Queue '{queue_name}' deleted from destination")
+            except Exception as e:
+                logging.error(f"Failed to delete queue '{queue_name}': {e}")
+                self.errors.append((queue_name, f"deletion failed: {e}"))
+
+        if queues_to_delete:
+            logging.info("Waiting 120 seconds for Azure to fully delete queues...")
+            time.sleep(120)
+
     def replicate(self) -> None:
         logging.info(f"Source Queue Storage URL: {self.source_url}")
         logging.info(f"Destination Queue Storage URL: {self.dest_url}")
@@ -96,15 +135,21 @@ class QueueReplicator:
             logging.info(
                 f"Found {len(source_queues)} queues to replicate from '{self.source_url}'"
             )
+
+            queue_names = [queue.name for queue in source_queues]
+
+            # Phase 1: Delete existing queues
+            self.delete_existing_queues(queue_names)
+
+            # Phase 2: Create and copy queues
+            logging.info("Phase 2: Creating and copying queues")
             for queue in source_queues:
                 queue_name = queue.name
                 logging.info(f"Processing queue: {queue_name}")
                 try:
                     dest_queue_client = self.dest_service.get_queue_client(queue_name)
                     dest_queue_client.create_queue()
-                    logging.info(
-                        f"Queue '{queue_name}' created or already exists in destination"
-                    )
+                    logging.info(f"Queue '{queue_name}' created in destination")
                     source_queue_client = self.source_service.get_queue_client(
                         queue_name
                     )
