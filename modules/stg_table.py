@@ -41,12 +41,16 @@ class TableReplicator:
         client_secret: str,
         source_account: str,
         dest_account: str,
+        max_retries: int,
+        retry_delay: int,
     ):
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
         self.source_account = source_account
         self.dest_account = dest_account
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self.errors = []
         if not self.validate_env():
             sys.exit(1)
@@ -144,6 +148,8 @@ class TableReplicator:
             logging.info(f"Retrieving list of tables from {self.source_url}...")
             source_tables = self.source_service.list_tables()
             source_tables_list = list(source_tables)  # Materializza la lista
+            total_tables = len(source_tables_list)
+            logging.info(f"Found {total_tables} tables to replicate")
             table_names = [table.name for table in source_tables_list]
 
             # Phase 1: Delete existing tables
@@ -154,9 +160,11 @@ class TableReplicator:
         except Exception as e:
             logging.critical(f"Error retrieving tables from {self.source_url}: {e}")
             sys.exit(1)
-        for table in source_tables_list:
+        for table_index, table in enumerate(source_tables_list, 1):
             table_name = table.name
-            logging.info(f"Replicating table: '{table_name}'")
+            logging.info(
+                f"Replicating table ({table_index}/{total_tables}): '{table_name}'"
+            )
             try:
                 source_table_client: TableClient = self.source_service.get_table_client(
                     table_name=table_name
@@ -186,9 +194,7 @@ class TableReplicator:
                     partition_groups[entity["PartitionKey"]].append(entity)
                 for pk, pk_entities in partition_groups.items():
                     for batch in chunk(pk_entities, size=100):
-                        max_retries = 10
-                        retry_delay = 10
-                        for attempt in range(1, max_retries + 1):
+                        for attempt in range(1, self.max_retries + 1):
                             try:
                                 dest_table_client.submit_transaction(
                                     [
@@ -202,16 +208,14 @@ class TableReplicator:
                                 )
                                 break
                             except Exception as be:
-                                if attempt < max_retries:
+                                if attempt < self.max_retries:
                                     logging.warning(
-                                        f"[Table: {table_name} PK: {pk}] Attempt {attempt}/{max_retries} failed for batch: {be}. Retrying in {retry_delay}s..."
+                                        f"[Table: {table_name} PK: {pk}] Attempt {attempt}/{self.max_retries} failed for batch: {be}. Retrying in {self.retry_delay}s..."
                                     )
-                                    import time
-
-                                    time.sleep(retry_delay)
+                                    time.sleep(self.retry_delay)
                                 else:
                                     logging.error(
-                                        f"Batch error in table '{table_name}' PartitionKey='{pk}' after {max_retries} attempts: {be}"
+                                        f"Batch error in table '{table_name}' PartitionKey='{pk}' after {self.max_retries} attempts: {be}"
                                     )
                                     self.errors.append((table_name, str(be)))
                 logging.info(

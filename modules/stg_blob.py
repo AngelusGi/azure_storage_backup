@@ -34,6 +34,8 @@ class BlobReplicator:
         client_secret: str,
         source_account: str,
         dest_account: str,
+        max_retries: int,
+        retry_delay: int,
         overwrite: bool = False,
         check_modification_time: bool = True,
         check_size: bool = True,
@@ -48,6 +50,8 @@ class BlobReplicator:
         self.check_modification_time = check_modification_time
         self.check_size = check_size
         self.check_content_md5 = check_content_md5
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self.errors = []
         if not self.validate_env():
             sys.exit(1)
@@ -189,6 +193,11 @@ class BlobReplicator:
             source_containers = self.source_service.list_containers(
                 include_metadata=True
             )
+            source_containers_list = list(
+                source_containers
+            )  # Materialize the list to get count
+            total_containers = len(source_containers_list)
+            logging.info(f"Found {total_containers} containers to process")
         except Exception as e:
             logging.critical(f"Error retrieving containers from {self.source_url}: {e}")
             sys.exit(1)
@@ -197,9 +206,11 @@ class BlobReplicator:
         total_skipped = 0
         total_errors = 0
 
-        for container in source_containers:
+        for container_index, container in enumerate(source_containers_list, 1):
             container_name = container.name
-            logging.info(f"Processing container: '{container_name}'")
+            logging.info(
+                f"Processing container ({container_index}/{total_containers}): '{container_name}'"
+            )
 
             try:
                 source_container_client: ContainerClient = (
@@ -253,9 +264,6 @@ class BlobReplicator:
                 container_copied = 0
                 container_skipped = 0
                 container_errors = 0
-                max_retries = 3
-                retry_delay = 5
-
                 logging.info(
                     f"Found {total_blobs} blobs in container '{container_name}'"
                 )
@@ -263,7 +271,7 @@ class BlobReplicator:
                 for i, blob in enumerate(blobs, 1):
                     blob_name = blob.name
 
-                    for attempt in range(1, max_retries + 1):
+                    for attempt in range(1, self.max_retries + 1):
                         try:
                             source_blob_client: BlobClient = (
                                 source_container_client.get_blob_client(blob_name)
@@ -305,32 +313,32 @@ class BlobReplicator:
                                 break
 
                         except HttpResponseError as e:
-                            if attempt < max_retries:
+                            if attempt < self.max_retries:
                                 logging.warning(
-                                    f"[{container_name}] Attempt {attempt}/{max_retries} failed for blob '{blob_name}': {e}. Retrying in {retry_delay}s..."
+                                    f"[{container_name}] Attempt {attempt}/{self.max_retries} failed for blob '{blob_name}': {e}. Retrying in {self.retry_delay}s..."
                                 )
                                 import time
 
-                                time.sleep(retry_delay)
+                                time.sleep(self.retry_delay)
                             else:
                                 logging.error(
-                                    f"[{container_name}] Failed to process blob '{blob_name}' after {max_retries} attempts: {e}"
+                                    f"[{container_name}] Failed to process blob '{blob_name}' after {self.max_retries} attempts: {e}"
                                 )
                                 self.errors.append(
                                     (f"{container_name}/{blob_name}", str(e))
                                 )
                                 container_errors += 1
                         except Exception as e:
-                            if attempt < max_retries:
+                            if attempt < self.max_retries:
                                 logging.warning(
-                                    f"[{container_name}] Attempt {attempt}/{max_retries} failed for blob '{blob_name}': {e}. Retrying in {retry_delay}s..."
+                                    f"[{container_name}] Attempt {attempt}/{self.max_retries} failed for blob '{blob_name}': {e}. Retrying in {self.retry_delay}s..."
                                 )
                                 import time
 
-                                time.sleep(retry_delay)
+                                time.sleep(self.retry_delay)
                             else:
                                 logging.error(
-                                    f"[{container_name}] Failed to process blob '{blob_name}' after {max_retries} attempts: {e}"
+                                    f"[{container_name}] Failed to process blob '{blob_name}' after {self.max_retries} attempts: {e}"
                                 )
                                 self.errors.append(
                                     (f"{container_name}/{blob_name}", str(e))

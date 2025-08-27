@@ -30,12 +30,16 @@ class QueueReplicator:
         client_secret: str,
         source_account: str,
         dest_account: str,
+        max_retries: int,
+        retry_delay: int,
     ):
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
         self.source_account = source_account
         self.dest_account = dest_account
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         self.errors = []
         if not self.validate_env():
             sys.exit(1)
@@ -132,8 +136,9 @@ class QueueReplicator:
             sys.exit(1)
         try:
             source_queues = list(self.source_service.list_queues())
+            total_queues = len(source_queues)
             logging.info(
-                f"Found {len(source_queues)} queues to replicate from '{self.source_url}'"
+                f"Found {total_queues} queues to replicate from '{self.source_url}'"
             )
 
             queue_names = [queue.name for queue in source_queues]
@@ -143,9 +148,11 @@ class QueueReplicator:
 
             # Phase 2: Create and copy queues
             logging.info("Phase 2: Creating and copying queues")
-            for queue in source_queues:
+            for queue_index, queue in enumerate(source_queues, 1):
                 queue_name = queue.name
-                logging.info(f"Processing queue: {queue_name}")
+                logging.info(
+                    f"Processing queue ({queue_index}/{total_queues}): {queue_name}"
+                )
                 try:
                     dest_queue_client = self.dest_service.get_queue_client(queue_name)
                     dest_queue_client.create_queue()
@@ -157,11 +164,9 @@ class QueueReplicator:
                         messages_per_page=32
                     )
                     total_copied = 0
-                    max_retries = 10
-                    retry_delay = 10
                     for msg_batch in messages.by_page():
                         for msg in msg_batch:
-                            for attempt in range(1, max_retries + 1):
+                            for attempt in range(1, self.max_retries + 1):
                                 try:
                                     logging.debug(f"message content {msg}")
                                     if msg.expires_on.year == 9999:
@@ -178,14 +183,14 @@ class QueueReplicator:
                                     total_copied += 1
                                     break
                                 except Exception as e:
-                                    if attempt < max_retries:
+                                    if attempt < self.max_retries:
                                         logging.warning(
-                                            f"[{queue_name}] Attempt {attempt}/{max_retries} failed for message '{msg.id}': {e}. Retrying in {retry_delay}s..."
+                                            f"[{queue_name}] Attempt {attempt}/{self.max_retries} failed for message '{msg.id}': {e}. Retrying in {self.retry_delay}s..."
                                         )
-                                        time.sleep(retry_delay)
+                                        time.sleep(self.retry_delay)
                                     else:
                                         logging.error(
-                                            f"[{queue_name}] Failed to send message '{msg.id}' after {max_retries} attempts: {e}"
+                                            f"[{queue_name}] Failed to send message '{msg.id}' after {self.max_retries} attempts: {e}"
                                         )
                                         self.errors.append((queue_name, str(e)))
                     logging.info(

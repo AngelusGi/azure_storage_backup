@@ -68,6 +68,16 @@ if __name__ == "__main__":
         default=os.getenv("AZURE_DEST_CONNECTION_STRING_FILE_SHARE"),
         type=str,
     )
+    parser.add_argument(
+        "--retry-delay-in-seconds",
+        default=os.getenv("RETRY_DELAY_IN_SECONDS", 10),
+        type=int,
+    )
+    parser.add_argument(
+        "--retry-count",
+        default=os.getenv("RETRY_COUNT", 3),
+        type=int,
+    )
 
     args = parser.parse_args()
 
@@ -81,6 +91,8 @@ if __name__ == "__main__":
         source_account=args.source_account_blob,
         dest_account=args.dest_account_blob,
         overwrite=args.overwrite_blob == "true",
+        max_retries=args.retry_count,
+        retry_delay=args.retry_delay_in_seconds,
     )
     blob_replicator.replicate()
 
@@ -91,6 +103,8 @@ if __name__ == "__main__":
         client_secret=args.client_secret,
         source_account=args.source_account_queue,
         dest_account=args.dest_account_queue,
+        max_retries=args.retry_count,
+        retry_delay=args.retry_delay_in_seconds,
     )
     queue_replicator.replicate()
 
@@ -101,6 +115,8 @@ if __name__ == "__main__":
         client_secret=args.client_secret,
         source_account=args.source_account_table,
         dest_account=args.dest_account_table,
+        max_retries=args.retry_count,
+        retry_delay=args.retry_delay_in_seconds,
     )
     table_replicator.replicate()
 
